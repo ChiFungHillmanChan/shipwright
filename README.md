@@ -1,10 +1,10 @@
-# Claude Skills
+# Shipwright
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Claude Code](https://img.shields.io/badge/Claude%20Code-Skills-blueviolet)](https://docs.anthropic.com/en/docs/claude-code)
+[![Claude Code](https://img.shields.io/badge/Claude%20Code-Plugin-blueviolet)](https://docs.anthropic.com/en/docs/claude-code)
 [![Plugin Marketplace](https://img.shields.io/badge/Marketplace-Ready-green)](#publishing-to-the-marketplace)
 
-A collection of production-tested skills for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) — Anthropic's official CLI for Claude. These skills extend Claude's capabilities with structured workflows for shipping code, debugging, code review, and payment integration.
+Production-tested Claude Code skills for the three things every developer does daily: **ship code, squash bugs, and review PRs.**
 
 > **Skills** are markdown files that teach Claude structured workflows. When you invoke a skill (e.g., `/ship-it`), Claude reads the SKILL.md and follows the workflow step by step. Unlike simple prompts, skills define multi-phase processes with decision trees, background agents, and verification steps.
 
@@ -12,15 +12,16 @@ A collection of production-tested skills for [Claude Code](https://docs.anthropi
 
 ```bash
 # One-liner: install all skills globally
-git clone https://github.com/ChiFungHillmanChan/claude-skills.git && cp -r claude-skills/skills/* ~/.claude/skills/
+git clone https://github.com/ChiFungHillmanChan/shipwright.git && cp -r shipwright/skills/* ~/.claude/skills/
 ```
 
 Or install individual skills:
 
 ```bash
 # Install only the ones you need
-cp -r claude-skills/skills/ship-it ~/.claude/skills/
-cp -r claude-skills/skills/debugmode ~/.claude/skills/
+cp -r shipwright/skills/ship-it ~/.claude/skills/
+cp -r shipwright/skills/debugmode ~/.claude/skills/
+cp -r shipwright/skills/code-review ~/.claude/skills/
 ```
 
 ## Skills
@@ -30,7 +31,6 @@ cp -r claude-skills/skills/debugmode ~/.claude/skills/
 | [`/ship-it`](skills/ship-it/SKILL.md) | Full ship workflow — commit to merged PR | Done coding, want to ship |
 | [`/debugmode`](skills/debugmode/SKILL.md) | Hypothesis-driven debugging with runtime evidence | Hit a bug, need systematic approach |
 | [`/code-review`](skills/code-review/SKILL.md) | 5-agent parallel code review | Pre-PR quality check |
-| [`/stripe-integration`](skills/stripe-integration/SKILL.md) | Stripe payment processing reference | Adding payments to your app |
 
 ---
 
@@ -104,7 +104,7 @@ Safety (branch + stash) → Hypothesize (3-5 theories) → Reproduce (commit tes
 
 > **[View SKILL.md](skills/code-review/SKILL.md)**
 
-Dispatches 5 specialist agents in parallel to perform a deep, evidence-based code review. Every finding must cite real file paths and line numbers — no guessing.
+Dispatches 5 specialist agents in parallel to perform a deep, evidence-based code review of **any codebase**. Auto-detects your tech stack (language, framework, ORM, test framework) and adapts each agent's checks accordingly. Every finding must cite real file paths and line numbers — no guessing.
 
 **When to use:**
 - Before creating a PR
@@ -118,41 +118,15 @@ Launches 5 parallel review agents simultaneously:
 
 | Agent | Focus Area |
 |-------|-----------|
-| Database Query Analyst | N+1 queries, missing select optimization, caching opportunities, transaction usage |
-| API Reliability Analyst | Error response consistency, retry logic, input validation, rate limiting, timeouts |
-| Security Auditor | Auth bypass, authorization gaps, injection vulnerabilities, secret management, CORS |
-| Test Quality Inspector | Hardcoded values, mock fidelity, test isolation, coverage gaps, assertion quality |
-| Performance Analyst | Cron job isolation, memory management, concurrency control, resource exhaustion |
+| Database & Data Layer Analyst | N+1 queries, over-fetching, missing indexes, transaction usage, connection management, caching |
+| API & Service Reliability Analyst | Error consistency, external service failure handling, input validation, rate limiting, timeouts |
+| Security Auditor | Auth bypass, authorization gaps, injection vulnerabilities, secret management, CORS, dependency CVEs |
+| Test Quality Inspector | Coverage gaps, mock fidelity, test isolation, assertion quality, flakiness risk |
+| Performance & Reliability Analyst | Memory management, concurrency control, background job isolation, resource exhaustion, async patterns |
 
 Findings are synthesized into a single report organized by severity (Critical > Warning > Info).
 
-> **Note:** This skill was originally built for a specific codebase. To adapt it for your project, update the file paths and project-specific details in the [SKILL.md](skills/code-review/SKILL.md). The 5-agent parallel pattern works for any backend codebase.
-
----
-
-### `/stripe-integration` — Stripe Payment Processing
-
-> **[View SKILL.md](skills/stripe-integration/SKILL.md)**
-
-A comprehensive reference for implementing Stripe payments — checkout sessions, subscriptions, webhooks, refunds, and customer management.
-
-**When to use:**
-- Integrating Stripe payments into a web or mobile app
-- Setting up subscription billing
-- Implementing webhook handlers
-- Processing refunds and disputes
-- Building marketplace flows with Stripe Connect
-
-**What it covers:**
-- Hosted Checkout vs Custom Payment Intents vs Setup Intents
-- Subscription lifecycle (create, update, cancel)
-- Webhook security and idempotent event handling
-- Customer and payment method management
-- Refund and dispute handling
-- Test card numbers and testing strategies
-- PCI compliance best practices
-
-Includes ready-to-use code patterns in Python with frontend JavaScript examples.
+**Works with any stack** — the skill auto-detects your project type from `package.json`, `requirements.txt`, `go.mod`, `Cargo.toml`, etc. and tailors each agent's review accordingly.
 
 ---
 
@@ -161,8 +135,8 @@ Includes ready-to-use code patterns in Python with frontend JavaScript examples.
 ### Option 1: Global Install (all projects)
 
 ```bash
-git clone https://github.com/ChiFungHillmanChan/claude-skills.git
-cp -r claude-skills/skills/* ~/.claude/skills/
+git clone https://github.com/ChiFungHillmanChan/shipwright.git
+cp -r shipwright/skills/* ~/.claude/skills/
 ```
 
 ### Option 2: Project-Level Install (single project)
@@ -170,16 +144,14 @@ cp -r claude-skills/skills/* ~/.claude/skills/
 ```bash
 # From your project root
 mkdir -p .claude/skills
-cp -r /path/to/claude-skills/skills/ship-it .claude/skills/
+cp -r /path/to/shipwright/skills/ship-it .claude/skills/
 ```
 
 ### Option 3: Install via Plugin Marketplace
 
-If this repo is set up as a [Claude Code plugin marketplace](#publishing-to-the-marketplace):
-
 ```
-/plugin marketplace add ChiFungHillmanChan/claude-skills
-/plugin install ship-it@claude-skills
+/plugin marketplace add ChiFungHillmanChan/shipwright
+/plugin install ship-it@shipwright
 ```
 
 ### Verify Installation
@@ -189,6 +161,7 @@ Start a new Claude Code session and invoke the skill:
 ```
 /ship-it
 /debugmode
+/code-review
 ```
 
 If the skill appears in the autocomplete list, it's installed correctly.
@@ -212,14 +185,6 @@ description: When Claude should trigger this skill
 2. **Edit the workflow** — modify steps, add project-specific paths, change conventions
 3. **Fork a skill** — copy a directory, rename it, and adapt to your needs
 
-**Example — adapting code-review for your project:**
-
-```bash
-cp -r ~/.claude/skills/code-review ~/.claude/skills/my-review
-# Edit ~/.claude/skills/my-review/SKILL.md
-# Replace file paths and project-specific details with your own
-```
-
 ## How Claude Skills Work
 
 | Concept | Description |
@@ -228,7 +193,7 @@ cp -r ~/.claude/skills/code-review ~/.claude/skills/my-review
 | **Project skills** (`.claude/skills/`) | Available only in that project |
 | **Frontmatter** | `name` and `description` control discovery and auto-triggering |
 | **Rigid skills** | Strict step-by-step workflows (debugmode, ship-it) — follow exactly |
-| **Flexible skills** | Reference patterns to adapt (stripe-integration) — use as needed |
+| **Flexible skills** | Reference patterns to adapt — use as needed |
 
 For more details, see the official [Claude Code Skills documentation](https://docs.anthropic.com/en/docs/claude-code/skills).
 
@@ -241,7 +206,7 @@ Want to distribute your skills as a Claude Code plugin marketplace? Here's how.
 Each skill needs a `plugin.json` manifest:
 
 ```
-my-marketplace/
+shipwright/
 ├── .claude-plugin/
 │   └── marketplace.json       # Marketplace catalog
 ├── plugins/
@@ -270,12 +235,12 @@ Place this at `.claude-plugin/marketplace.json`:
 
 ```json
 {
-  "name": "claude-skills",
+  "name": "shipwright",
   "owner": {
     "name": "Hillman Chan"
   },
   "metadata": {
-    "description": "Production-tested skills for shipping, debugging, code review, and payments"
+    "description": "Production-tested skills for shipping, debugging, and code review"
   },
   "plugins": [
     {
@@ -292,6 +257,14 @@ Place this at `.claude-plugin/marketplace.json`:
       "description": "Hypothesis-driven debugging with runtime instrumentation",
       "version": "1.0.0",
       "keywords": ["debugging", "testing", "instrumentation"],
+      "category": "development"
+    },
+    {
+      "name": "code-review",
+      "source": "./plugins/code-review",
+      "description": "5-agent parallel code review for any codebase",
+      "version": "1.0.0",
+      "keywords": ["review", "security", "performance", "testing", "database"],
       "category": "development"
     }
   ]
@@ -312,10 +285,12 @@ git push origin main
 
 ```bash
 # Users add your marketplace
-/plugin marketplace add ChiFungHillmanChan/claude-skills
+/plugin marketplace add ChiFungHillmanChan/shipwright
 
 # Then install individual plugins
-/plugin install ship-it@claude-skills
+/plugin install ship-it@shipwright
+/plugin install debugmode@shipwright
+/plugin install code-review@shipwright
 ```
 
 ### Submit to the Official Directory

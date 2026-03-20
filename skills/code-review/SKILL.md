@@ -1,60 +1,56 @@
 ---
-name: evoke-code-review
-description: Comprehensive code review for the lattice-evoke SEN assessment platform. Use this skill when reviewing code quality, doing code review, auditing database queries, checking API reliability, security hardening, test quality, or backend performance in the lattice-evoke repo. Trigger whenever the user mentions "code review", "review my code", "audit", "check quality", "review PR", "review changes", or any quality/security/performance concern about the evoke codebase — even if they don't explicitly say "code review".
+name: code-review
+description: Comprehensive code review using 5 parallel specialist agents. Use this skill when reviewing code quality, doing code review, auditing database queries, checking API reliability, security hardening, test quality, or backend performance. Trigger whenever the user mentions "code review", "review my code", "audit", "check quality", "review PR", "review changes", or any quality/security/performance concern — even if they don't explicitly say "code review".
 ---
 
-# Evoke Code Review — Agent Team Audit
+# Code Review — 5-Agent Parallel Audit
 
-This skill dispatches 5 parallel specialist agents to perform a deep, evidence-based code review of the lattice-evoke server codebase. Every finding must cite real file paths and line numbers. No guessing, no assumptions — only what the code actually shows.
-
-**All summary output to the user must be in Cantonese (廣東話).** Technical terms (file names, function names, error codes) stay in English.
+This skill dispatches 5 parallel specialist agents to perform a deep, evidence-based code review of any codebase. Every finding must cite real file paths and line numbers. No guessing, no assumptions — only what the code actually shows.
 
 ## How It Works
 
-You dispatch 5 agents in parallel. Each agent focuses on one domain. When all agents complete, you synthesize their findings into a single Cantonese report organized by severity (Critical → Warning → Info).
+You dispatch 5 agents in parallel. Each agent focuses on one domain. When all agents complete, you synthesize their findings into a single report organized by severity (Critical > Warning > Info).
 
 ## Pre-flight
 
-Before dispatching agents, determine the review scope:
+Before dispatching agents, determine the review scope and project context:
 
-1. **Changed files scope**: Run `git diff --name-only main...HEAD` and `git status --short` to identify what changed
-2. **Full audit scope**: If the user asks for a full review (or doesn't specify), review the entire `server/` directory
-3. Share the scope with each agent so they focus appropriately
+1. **Detect project type**: Read `package.json`, `requirements.txt`, `go.mod`, `Cargo.toml`, or equivalent to understand the tech stack (language, framework, ORM, test framework).
+2. **Determine review scope**:
+   - **Changed files scope**: Run `git diff --name-only main...HEAD` and `git status --short` to identify what changed.
+   - **Full audit scope**: If the user asks for a full review (or doesn't specify), review the entire source directory.
+3. **Identify key directories**: Find the main source directories (e.g., `src/`, `lib/`, `app/`, `server/`), test directories, and config files.
+4. Share the scope, tech stack, and directory layout with each agent so they focus appropriately.
 
 ## Agent Dispatch
 
 Launch all 5 agents in a single message (parallel). Each agent is a `general-purpose` subagent with read-only intent (research only, no code changes).
 
-### Agent 1: Database Query Analyst (資料庫查詢分析員)
+**IMPORTANT**: In each agent prompt below, replace `{PROJECT_ROOT}` with the actual project path, `{SCOPE}` with the review scope, and `{TECH_STACK}` with the detected tech stack.
+
+### Agent 1: Database & Data Layer Analyst
 
 ```
-You are reviewing the lattice-evoke server codebase at /Users/hillmanchan/Desktop/lattice-evoke/server for database query quality.
+You are reviewing the codebase at {PROJECT_ROOT} for database and data layer quality.
 
-SCOPE: {changed files or "full audit"}
+SCOPE: {SCOPE}
+TECH STACK: {TECH_STACK}
 
-Your job is to find real problems in how Prisma is used. Read every file that imports from '@prisma/client' or uses the `prisma` singleton. For each file, check:
+Read every file that interacts with the database (ORM models, queries, repositories, data access layers). For each file, check:
 
-1. **Unnecessary queries**: Are there queries that fetch data already available in scope? Are there duplicate findMany/findFirst calls that could be combined? Look for N+1 patterns (queries inside loops).
+1. **N+1 query patterns**: Queries inside loops, repeated fetches for data already available in scope. Look for lazy-loaded relationships triggered in iteration.
 
-2. **Missing select/include optimization**: Are routes fetching entire records when they only need 2-3 fields? Check if `.select()` is used appropriately. Fetching `select: { id: true, name: true }` instead of the full row matters for performance.
+2. **Over-fetching**: Are queries fetching entire records when only 2-3 fields are needed? Check if field selection/projection is used appropriately.
 
-3. **Missing caching opportunities**:
-   - Server actions called from dashboard pages — if a user switches tabs and comes back, does the same query fire again? Look at components that call server actions on mount without caching.
-   - Data that rarely changes (pricing, configuration, store names) should be cached in-memory or via React Query/SWR on the client side.
-   - Check if `file-search-stores.ts` in-memory cache is properly invalidated.
+3. **Missing indexes**: Are there queries filtering or sorting on columns that likely lack indexes? Check WHERE clauses, ORDER BY, and JOIN conditions against schema definitions.
 
-4. **Transaction usage**: Are transactions used where needed (concurrent writes)? Are they overused where a simple query would suffice? Check isolation levels — Serializable is expensive and should only be used when truly needed.
+4. **Transaction usage**: Are transactions used where needed (concurrent writes to related tables)? Are they overused where a simple query would suffice?
 
-5. **Query patterns in cron jobs**: Batch processing should use cursor-based pagination, not offset. Check `usage-aggregation.ts`, `invoice-generation.ts`, `archive-usage` for large dataset handling.
+5. **Connection management**: Is the connection pool configured? Are connections released properly? Look for potential connection leaks in error paths.
 
-Key files to examine:
-- lib/prisma.ts
-- lib/usage-tracking.ts, lib/usage-retry.ts, lib/usage-aggregation.ts
-- lib/billing/usage-daily-aggregation.ts
-- lib/invoice-generation.ts
-- All files in app/api/v1/
-- All files in app/actions/
-- lib/file-search-stores.ts (in-memory cache pattern)
+6. **Caching opportunities**: Data that rarely changes (configuration, pricing, categories) should be cached. Check for repeated identical queries on the same request cycle.
+
+7. **Batch operations**: Large dataset processing should use cursor-based pagination or streaming, not loading all records into memory. Check cron jobs, background workers, and migration scripts.
 
 Output format — for each finding:
 - File path and line number(s)
@@ -64,48 +60,35 @@ Output format — for each finding:
 - Suggested fix (concrete, not vague)
 ```
 
-### Agent 2: API Service Reliability Analyst (API 服務可靠性分析員)
+### Agent 2: API & Service Reliability Analyst
 
 ```
-You are reviewing the lattice-evoke server API routes at /Users/hillmanchan/Desktop/lattice-evoke/server for service reliability and error handling.
+You are reviewing the API layer at {PROJECT_ROOT} for service reliability and error handling.
 
-SCOPE: {changed files or "full audit"}
+SCOPE: {SCOPE}
+TECH STACK: {TECH_STACK}
 
-This is a B2B API service — external systems depend on it for video analysis. Downtime, unclear errors, or silent failures damage trust. Review every route under app/api/v1/ and check:
+Review every route handler, controller, and service endpoint. Check:
 
-1. **Error response consistency**: Every error must return the standardized format:
-   { "success": false, "error": { "code": "ERROR_CODE", "message": "human-readable" } }
-   Check if any route returns raw strings, missing codes, or inconsistent shapes. The apiError() helper from lib/api-error-codes.ts should be used everywhere.
+1. **Error response consistency**: Do all error responses follow a consistent format? Check if any route returns raw strings, missing error codes, or inconsistent shapes. There should be a standardized error response helper used everywhere.
 
-2. **Gemini API failure handling**: When Gemini API is down or the API key is invalid/expired:
-   - Does the analysis route surface a clear error to the caller?
+2. **External service failure handling**: When external APIs (AI services, payment providers, email services, etc.) are down or return errors:
+   - Does the code surface clear errors to the caller?
    - Is there retry logic with exponential backoff for transient errors (429, 500, 502, 503)?
-   - Are non-retryable errors (401 invalid key, 400 bad request) immediately returned without retry?
-   - Check lib/gemini.ts, lib/analysis-processor.ts for error handling paths.
+   - Are non-retryable errors (401, 400) immediately returned without retry?
 
-3. **Service availability signals**:
-   - Is there a health check endpoint? (GET /api/v1/health or similar)
-   - Do routes return appropriate HTTP status codes? (400 vs 500 vs 503)
-   - When the database is down, what happens? Does the error leak internal details?
+3. **Input validation completeness**: Every endpoint accepting user input must validate before processing. Check for routes that access request body/query fields without validation (Zod, Joi, class-validator, or manual checks).
 
-4. **Input validation completeness**: Every POST/PATCH route must validate input with Zod before processing. Check for routes that access request body fields without validation.
+4. **Rate limiting**: Is rate limiting applied consistently across public endpoints? Check if any route bypasses the rate limiter.
 
-5. **Rate limiting gaps**: Is rate limiting applied consistently? Check if any route bypasses the rate limiter. Look at the sliding window implementation in api-key-auth.ts for correctness.
+5. **Timeout and resource cleanup**:
+   - Do long-running operations have timeouts?
+   - Are temp files, streams, and connections cleaned up on error paths (finally blocks)?
+   - Are external API calls wrapped with timeouts?
 
-6. **Timeout and resource cleanup**:
-   - Do long-running operations (video upload, Gemini calls) have timeouts?
-   - Are temp files cleaned up on error paths? Check analysis-processor.ts cleanup logic.
-   - Are Gemini file uploads always deleted after processing, even on failure?
+6. **HTTP status codes**: Are routes returning appropriate codes? (400 for bad input, 401 for auth, 403 for forbidden, 404 for not found, 500 for server errors). Check for generic 500s that should be specific.
 
-7. **API versioning and backwards compatibility**: Routes are under /v1/. Check if any breaking changes were introduced without versioning.
-
-Key files:
-- All routes in app/api/v1/
-- lib/api-error-codes.ts
-- lib/api-key-auth.ts
-- lib/gemini.ts
-- lib/analysis-processor.ts
-- lib/analysis-request.ts
+7. **Health check endpoint**: Is there a health check route for monitoring? Does it verify downstream dependencies (database, cache, external services)?
 
 Output format — for each finding:
 - File path and line number(s)
@@ -115,59 +98,50 @@ Output format — for each finding:
 - Suggested fix
 ```
 
-### Agent 3: Security Auditor (安全審計員)
+### Agent 3: Security Auditor
 
 ```
-You are performing a production security audit of the lattice-evoke server at /Users/hillmanchan/Desktop/lattice-evoke/server.
+You are performing a security audit of the codebase at {PROJECT_ROOT}.
 
-SCOPE: {changed files or "full audit"}
+SCOPE: {SCOPE}
+TECH STACK: {TECH_STACK}
 
-This is a SEN (Special Educational Needs) platform handling sensitive student data. Security failures have real consequences. Check:
+Check:
 
 1. **Authentication bypass risks**:
    - Can any authenticated route be accessed without valid credentials?
    - Are there routes that check auth but don't return early on failure?
-   - Check all route handlers: do they ALL call validateApiKeyAuth() or validateUnifiedAuth() at the top?
-   - Cron routes: is x-cron-secret validated with timing-safe comparison?
+   - Do all protected route handlers enforce authentication at the top before any business logic?
 
 2. **Authorization gaps**:
-   - Knowledge Layer access: Can Layer A (global) be written by non-super-admins?
-   - Can users access analysis jobs from other organizations?
-   - API key scope enforcement: If a key has scope ["analysis"], can it access /knowledge/?
-   - Check lib/knowledge-access.ts, lib/api-key-ownership.ts
+   - Can users access resources belonging to other users/organizations?
+   - Are resource ownership checks performed on every CRUD operation?
+   - Is role-based access control enforced consistently?
 
 3. **Injection vulnerabilities**:
-   - SQL injection via Prisma: Are there any raw queries (prisma.$queryRaw) without parameterization?
-   - NoSQL injection: Are there dynamic keys in Prisma where clauses from user input?
-   - XSS: Are user-provided strings (document titles, analysis reports) sanitized before storage/display?
-   - Path traversal: File upload paths — can a malicious filename escape the intended directory?
+   - SQL injection: Are there raw queries without parameterization?
+   - NoSQL injection: Are there dynamic keys in query filters from user input?
+   - XSS: Are user-provided strings sanitized before rendering in HTML responses?
+   - Command injection: Is user input ever passed to shell commands?
+   - Path traversal: Can malicious filenames escape intended directories?
 
 4. **Secret management**:
-   - Are secrets (API keys, connection strings) ever logged, included in error responses, or exposed in stack traces?
-   - Check console.log/console.error calls for secret leakage
-   - Are environment variables accessed safely (not at module level where they'd be undefined)?
+   - Are secrets (API keys, connection strings, tokens) ever logged, included in error responses, or exposed in stack traces?
+   - Check all logging calls for secret leakage.
+   - Are environment variables accessed safely?
 
 5. **Cryptographic practices**:
-   - API key hashing: Is HMAC-SHA256 used correctly? Check lib/api-keys.ts
-   - Token comparison: Is timing-safe comparison used for all secret comparisons?
-   - Random generation: Is crypto.randomBytes used (not Math.random) for security-sensitive values?
+   - Is password hashing using a strong algorithm (bcrypt, argon2, scrypt) — not MD5 or SHA-1?
+   - Is timing-safe comparison used for all secret/token comparisons?
+   - Is `crypto.randomBytes` (or equivalent) used for security-sensitive random values — not `Math.random`?
 
 6. **Data exposure**:
-   - Do API responses include fields that shouldn't be exposed (internal IDs, hashed tokens, admin flags)?
-   - Check .select() usage — are routes returning minimal data?
+   - Do API responses include fields that shouldn't be exposed (internal IDs, hashed tokens, admin flags, other users' data)?
    - Error responses: Do they leak stack traces or internal paths in production?
 
-7. **CORS and headers**: Check if CORS is properly configured. Check for missing security headers (CSRF protection, etc.)
+7. **CORS and security headers**: Is CORS properly configured? Check for overly permissive origins (`*`). Are security headers set (CSP, X-Frame-Options, etc.)?
 
-8. **Dependency vulnerabilities**: Check package.json for known vulnerable packages.
-
-Key files:
-- lib/api-key-auth.ts, lib/api-keys.ts
-- lib/unifiedAuth.ts, lib/cron-auth.ts
-- lib/knowledge-access.ts, lib/api-key-ownership.ts
-- lib/permissions.ts
-- All route handlers in app/api/v1/
-- package.json
+8. **Dependency vulnerabilities**: Check dependency files for known vulnerable packages.
 
 Output format — for each finding:
 - File path and line number(s)
@@ -177,57 +151,50 @@ Output format — for each finding:
 - Suggested fix with code
 ```
 
-### Agent 4: Test Quality Inspector (測試品質檢查員)
+### Agent 4: Test Quality Inspector
 
 ```
-You are auditing the test suite at /Users/hillmanchan/Desktop/lattice-evoke/server/__tests__/ against industry standards (Amazon, Microsoft, Google testing practices).
+You are auditing the test suite at {PROJECT_ROOT} for quality and coverage gaps.
 
-SCOPE: {changed files or "full audit"}
+SCOPE: {SCOPE}
+TECH STACK: {TECH_STACK}
 
-Read every test file and evaluate against these criteria:
+Read every test file and evaluate:
 
-1. **Hardcoded test values**:
-   - Are expected values computed from the same logic as the source, or independently derived?
-   - Check pricing.test.ts — does it recalculate expected costs or just hardcode magic numbers?
-   - Tests should verify behavior, not implementation details. A test that checks `expect(result).toBe(42)` is only good if 42 was independently computed.
+1. **Coverage gaps**:
+   - Compare source files against test files — what's untested?
+   - Are error paths tested (not just happy paths)?
+   - Are boundary conditions tested (empty arrays, null inputs, max values, zero, negative numbers)?
+   - Are external service failure scenarios tested?
 
 2. **Mock fidelity**:
-   - Do mocks accurately represent the real dependency's behavior?
-   - Check if Prisma mocks return realistic shapes (all required fields present)
+   - Do mocks accurately represent real dependency behavior?
    - Are there mocks that always return success? There should be matching failure-path tests.
-   - Watch for `vi.fn().mockResolvedValue(undefined)` used where the real function returns data.
+   - Watch for overly broad mocks that mask real behavior.
 
 3. **Test isolation**:
-   - Does `beforeEach` call `vi.clearAllMocks()` or `vi.resetAllMocks()`?
-   - Can test order affect results? Look for shared mutable state between tests.
+   - Is state properly reset between tests (beforeEach/afterEach cleanup)?
+   - Can test order affect results? Look for shared mutable state.
    - Are there tests that depend on previous tests having run?
 
-4. **Missing test coverage**:
-   - Compare every file in lib/ and app/api/v1/ against __tests__/ — what's untested?
-   - Are error paths tested? (not just happy paths)
-   - Are boundary conditions tested? (empty arrays, null inputs, max values)
-   - Specifically check: Are there tests for Gemini API failures, Azure Blob failures, network timeouts?
+4. **Assertion quality**:
+   - Are assertions specific enough? (`toBeTruthy()` is weak; `toBe(200)` is better)
+   - Are there tests with no assertions (just checking code doesn't throw)?
+   - Do tests verify the right thing (behavior vs implementation details)?
 
-5. **Test naming and organization**:
-   - Do describe/it blocks clearly state what's being tested and what the expected behavior is?
-   - Follow the pattern: "should [expected behavior] when [condition]"
+5. **Hardcoded test values**:
+   - Are expected values independently derived or just copied from the implementation?
+   - Check for magic numbers without explanation.
+
+6. **Test naming and organization**:
+   - Do describe/it blocks clearly state what's being tested and expected behavior?
+   - Pattern: "should [expected behavior] when [condition]"
    - Are tests grouped logically by feature/function?
 
-6. **Assertion quality**:
-   - Are assertions specific enough? `expect(result).toBeTruthy()` is weak; `expect(result.status).toBe(200)` is better.
-   - Are there tests with no assertions (just checking that code doesn't throw)?
-   - Do tests verify the right thing? (testing behavior vs testing implementation)
-
-7. **Industry standard patterns**:
-   - Amazon: Tests should be deterministic, fast, and independent
-   - Google: Tests should be clear, complete, and concise (the "test pyramid")
-   - Microsoft: Tests should cover security boundaries and data validation
-
-Key directories:
-- __tests__/lib/ (unit tests)
-- __tests__/app/api/ (route tests)
-- __tests__/app/actions/ (server action tests)
-- Compare against: lib/, app/api/v1/, app/actions/
+7. **Flakiness risk**:
+   - Tests depending on timing, network, or file system order
+   - Non-deterministic data (random values without seeding)
+   - Date/time sensitive tests without mocked clocks
 
 Output format — for each finding:
 - Test file path and line number(s)
@@ -237,64 +204,53 @@ Output format — for each finding:
 - Suggested fix with improved test code
 ```
 
-### Agent 5: Backend Performance Analyst (後端效能分析員)
+### Agent 5: Performance & Reliability Analyst
 
 ```
-You are reviewing the lattice-evoke server at /Users/hillmanchan/Desktop/lattice-evoke/server for performance issues and service stability.
+You are reviewing the codebase at {PROJECT_ROOT} for performance issues and service stability.
 
-SCOPE: {changed files or "full audit"}
+SCOPE: {SCOPE}
+TECH STACK: {TECH_STACK}
 
-This is a production SaaS platform. A single runaway job should never take down the entire service. Check:
+Check:
 
-1. **Cron job isolation**:
-   - process-analysis cron: Does it process jobs sequentially or could a stuck job block all processing?
-   - What happens if a Gemini API call hangs for 10 minutes? Is there a timeout?
-   - Check the CronLock pattern — what's the lock duration? Can it deadlock if the process crashes mid-job?
-   - Are cron jobs idempotent? If a cron fires twice, does it double-process?
+1. **Memory management**:
+   - Are large files/datasets loaded entirely into memory or streamed?
+   - Are temp files cleaned up in finally blocks?
+   - Large batch operations: Do they process all records at once or in bounded batches?
+   - Check for memory leaks: growing arrays, caches without eviction, event listeners not cleaned up.
 
-2. **Memory management**:
-   - Video processing: Are videos loaded entirely into memory or streamed?
-   - Check lib/analysis-processor.ts — how are temp files handled? Are they cleaned up in finally blocks?
-   - Large batch operations (usage aggregation): Do they process all records at once or in bounded batches?
-   - Check for memory leaks: Are there growing arrays, caches without eviction, or event listeners not cleaned up?
+2. **Concurrency control**:
+   - Are there race conditions where two concurrent requests could corrupt shared state?
+   - Are counters/limits enforced atomically (not read-check-write patterns)?
+   - Are database locks or transactions used where needed for concurrent writes?
 
-3. **Concurrency control**:
-   - School limit (3 concurrent) and global limit (10 concurrent) in analysis/route.ts — is this enforced atomically?
-   - What happens under race conditions? Two requests checking limits simultaneously could both pass.
-   - Is the Serializable isolation level actually needed, or would ReadCommitted suffice?
+3. **Background job isolation**:
+   - Can a stuck background job block all processing?
+   - Do long-running operations have timeouts?
+   - Are background jobs idempotent (safe to retry if they fail mid-execution)?
+   - Is there a stuck job detector or dead letter queue?
 
 4. **Resource exhaustion prevention**:
-   - File upload limits: Are they enforced at the route level or only client-side?
-   - Rate limiting: Is the sliding window implementation correct? Can it be bypassed with multiple API keys?
-   - Database connection pool: Is Prisma connection pool sized appropriately?
-   - Are there any unbounded loops or recursion?
+   - File upload size limits: enforced server-side (not just client-side)?
+   - Rate limiting correctness: Can it be bypassed?
+   - Database connection pool: sized appropriately?
+   - Are there unbounded loops, recursion, or queue growth?
 
-5. **Error recovery**:
-   - UsageRetryQueue: Does it have a max retry count? What happens to permanently failed events?
-   - Analysis jobs: What happens if a job is stuck in 'processing' forever? Is there a stuck job detector?
-   - Cleanup: If Azure Blob upload succeeds but Gemini processing fails, is the blob cleaned up?
+5. **Unnecessary work**:
+   - Redundant API calls (calling the same external service multiple times for the same data)?
+   - Expensive operations in hot paths that could be memoized or cached?
+   - Synchronous operations that could be async/parallel?
 
-6. **Unnecessary work**:
-   - Are there redundant API calls (calling the same external service multiple times for the same data)?
-   - Check if pricing calculations are done repeatedly when they could be memoized.
-   - Are there expensive operations in hot paths (e.g., crypto operations on every request that could be cached)?
+6. **Async patterns**:
+   - Are errors from fire-and-forget operations silently swallowed?
+   - Are Promises/futures properly awaited? Look for missing await keywords.
+   - Check for proper use of parallel execution (Promise.all / gather) vs unnecessary sequential awaits.
 
-7. **Async patterns**:
-   - Fire-and-forget patterns: Are errors from background operations silently swallowed?
-   - Are Promises properly awaited? Look for missing await keywords.
-   - Check for proper use of Promise.all vs sequential awaits where parallelism is possible.
-
-Key files:
-- app/api/v1/cron/process-analysis/route.ts
-- app/api/v1/cron/aggregate/route.ts
-- app/api/v1/cron/archive-usage/route.ts
-- lib/analysis-processor.ts
-- lib/usage-aggregation.ts
-- lib/usage-retry.ts
-- lib/invoice-generation.ts
-- lib/gemini.ts
-- lib/azure-blob.ts
-- lib/file-search-stores.ts
+7. **Logging & observability**:
+   - Are errors logged with enough context to debug (request ID, user ID, input that caused failure)?
+   - Are there log statements in hot loops that could flood log storage?
+   - Is there structured logging or just string concatenation?
 
 Output format — for each finding:
 - File path and line number(s)
@@ -306,30 +262,31 @@ Output format — for each finding:
 
 ## Synthesizing the Report
 
-After all 5 agents complete, combine their findings into a single report. The report must be in **Cantonese (廣東話)**.
+After all 5 agents complete, combine their findings into a single report.
 
 ### Report Structure
 
 ```markdown
-# 🔍 Evoke Code Review 報告
+# Code Review Report
 
-**審查範圍:** {scope description}
-**日期:** {date}
+**Scope:** {scope description}
+**Tech Stack:** {detected tech stack}
+**Date:** {date}
 
-## 🔴 嚴重問題 (Critical)
+## Critical Issues
 {All CRITICAL findings from all agents, grouped by domain}
 
-## 🟡 警告 (Warning)
+## Warnings
 {All WARNING findings from all agents, grouped by domain}
 
-## 🔵 建議 (Info)
+## Suggestions
 {All INFO findings from all agents, grouped by domain}
 
-## 📊 總結
-- 嚴重問題: X 個
-- 警告: X 個
-- 建議: X 個
-- {1-2 sentence overall assessment in Cantonese}
+## Summary
+- Critical: X issues
+- Warnings: X issues
+- Suggestions: X issues
+- {1-2 sentence overall assessment}
 ```
 
 ### Rules for the Final Report
@@ -337,9 +294,8 @@ After all 5 agents complete, combine their findings into a single report. The re
 1. **Every finding must have a real file path and line number.** If an agent reports something without citing code, drop it from the report.
 2. **No guessing.** If an agent says "this might be a problem" without showing the actual code, exclude it.
 3. **No filler.** Don't pad the report with obvious advice like "add more tests" without specifying exactly which functions lack coverage.
-4. **Deduplicate.** If multiple agents flag the same issue (e.g., missing error handling in analysis-processor.ts), consolidate into one finding.
+4. **Deduplicate.** If multiple agents flag the same issue, consolidate into one finding.
 5. **Be honest.** If the code is good in an area, say so. Don't manufacture problems.
-6. **Code snippets stay in English.** Only the descriptions and analysis are in Cantonese.
 
 ## When to Use This Skill
 

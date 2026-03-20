@@ -288,7 +288,7 @@ This is the key innovation — **commit-then-instrument pattern**:
 
 2. **Verify clean state:**
    ```bash
-   grep -r "\[DEBUG-MODE\]" server/ --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" --include="*.py" --include="*.go"
+   grep -r "\[DEBUG-MODE\]" . --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" --include="*.py" --include="*.go" --include="*.rb" --include="*.php"
    # Should return nothing
    ```
 
@@ -318,12 +318,14 @@ Prove the fix actually works with the committed reproduction test:
    git stash pop                             # Restore fix
    ```
 
-3. **Full verification suite:**
+3. **Full verification suite** — run whatever checks the project uses:
    ```bash
-   cd server && npx tsc --noEmit        # TypeScript check
-   cd server && pnpm run build           # Build check
-   cd server && pnpm run lint            # Lint check
-   cd server && pnpm run test:run        # All tests pass
+   # Detect and run the project's standard checks. Examples:
+   # TypeScript:  npx tsc --noEmit
+   # Build:       npm run build / pnpm run build / yarn build
+   # Lint:        npm run lint / pnpm run lint
+   # Tests:       npm test / pnpm run test / pytest / go test ./...
+   # Run ALL checks that CI would run — check the CI config if unsure
    ```
 
 4. **Ask user to manually verify** (for UI/UX bugs):

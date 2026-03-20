@@ -6,12 +6,13 @@ Restructure the Shipwright repo from loose skill files into a properly packaged 
 
 ## Scope
 
-Three file changes total:
-1. **Add** `.claude-plugin/marketplace.json`
-2. **Add** `package.json`
-3. **Rewrite** `README.md`
+Four file changes total:
+1. **Add** `.claude-plugin/plugin.json` — plugin descriptor (required for Claude Code to identify the plugin)
+2. **Add** `.claude-plugin/marketplace.json` — marketplace listing metadata
+3. **Add** `package.json` — minimal package descriptor
+4. **Rewrite** `README.md` — user-facing only
 
-No changes to skills, assets, LICENSE, or .gitignore.
+No changes to skills, assets, LICENSE, or .gitignore. No `commands/` directory needed (Superpowers has one but it's deprecated stubs).
 
 ## Reference Model
 
@@ -20,6 +21,7 @@ Superpowers plugin at `~/.claude/plugins/cache/claude-plugins-official/superpowe
 ```
 superpowers/
 ├── .claude-plugin/
+│   ├── plugin.json
 │   └── marketplace.json
 ├── skills/
 │   └── <skill-name>/SKILL.md
@@ -29,7 +31,18 @@ superpowers/
 
 Shipwright will mirror this exactly.
 
-## 1. `.claude-plugin/marketplace.json`
+## 1. `.claude-plugin/plugin.json`
+
+Plugin descriptor — required for Claude Code to identify and load the plugin.
+
+```json
+{
+  "name": "shipwright",
+  "description": "Ship code, squash bugs, and review PRs — production-tested skills for daily dev workflows"
+}
+```
+
+## 2. `.claude-plugin/marketplace.json`
 
 Create the marketplace listing file. Single plugin entry (bundled model — all skills in one install).
 
@@ -56,9 +69,9 @@ Create the marketplace listing file. Single plugin entry (bundled model — all 
 }
 ```
 
-## 2. `package.json`
+## 3. `package.json`
 
-Minimal package descriptor matching the Superpowers pattern:
+Minimal package descriptor. No `"main"` field needed — Shipwright is skills-only with no executable JS entry point (Superpowers has one for OpenCode support, which we don't need).
 
 ```json
 {
@@ -68,7 +81,7 @@ Minimal package descriptor matching the Superpowers pattern:
 }
 ```
 
-## 3. README Rewrite
+## 4. README Rewrite
 
 ### Content to KEEP (condensed)
 - Plugin name + tagline + badges
@@ -80,13 +93,14 @@ Minimal package descriptor matching the Superpowers pattern:
 - Contributing section (condensed)
 - License
 
-### Content to REMOVE
-- Lines 209-303: "Publishing to the Marketplace" section (how to build plugins — not user-facing)
-- Lines 305-319: "Get Listed on Awesome Lists" section (promotional)
-- Lines 321-331: "Skills vs Other Approaches" comparison table (educational, not user-facing)
-- Lines 339-347: "Related Resources" section (link dump)
-- Lines 15: "What are skills?" explainer block quote (users don't need this)
-- Lines 178-206: "Customization" and "How Claude Skills Work" sections (plugin-building guidance)
+### Sections to REMOVE
+- "Publishing to the Marketplace" — how to build plugins, not user-facing
+- "Get Listed on Awesome Lists" — promotional
+- "Skills vs Other Approaches" — comparison table, educational not user-facing
+- "Related Resources" — link dump
+- "What are skills?" block quote after demo GIF — users don't need this
+- "Customization" — plugin-building guidance
+- "How Claude Skills Work" — plugin-building guidance
 
 ### Target structure
 ```
@@ -109,6 +123,7 @@ Target: ~100-150 lines.
 ```
 shipwright/
 ├── .claude-plugin/
+│   ├── plugin.json               # NEW
 │   └── marketplace.json          # NEW
 ├── assets/
 │   ├── demo.gif
@@ -126,10 +141,18 @@ shipwright/
 └── README.md                     # REWRITTEN
 ```
 
+## Out of Scope
+
+- `commands/` directory — Superpowers has one but contents are deprecated stubs redirecting to skills
+- `hooks/` directory — no session-start hook needed for Shipwright
+- `.opencode/`, `.codex/`, `.cursor-plugin/` — cross-platform support not needed for v1
+- GitHub repo rename — the repo is `ChiFungHillmanChan/shipwright.git`, already correct
+
 ## Success Criteria
 
 - Plugin can be installed via `claude plugin add` from the GitHub repo
-- `marketplace.json` follows the same schema as Superpowers
+- Both `plugin.json` and `marketplace.json` follow the same schema as Superpowers
 - README accurately describes what the plugin does without teaching plugin development
 - No promotional or self-referential content in README
 - All three skills remain functional and unchanged
+- Validate by running `claude plugin add` against the repo after pushing

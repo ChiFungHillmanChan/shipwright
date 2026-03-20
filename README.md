@@ -83,7 +83,9 @@ A systematic debugging workflow that collects runtime evidence before proposing 
 ```
 Safety (branch + stash) → Hypothesize (3-5 theories) → Reproduce (commit test)
     → Instrument (tagged debug logs) → Observe (background agent analysis)
-    → git restore . (clean) → Fix → Red-to-green verify → Document
+    → git restore . (clean) → Fix → Red-to-green verify
+    → Live Monitor (agent runs server + watches logs) → User tests at localhost
+    → Document
 ```
 
 1. **Safety first** — creates a debug branch and stashes uncommitted work
@@ -93,6 +95,7 @@ Safety (branch + stash) → Hypothesize (3-5 theories) → Reproduce (commit tes
 5. **Observes** — runs reproduction, collects logs, uses background agents to analyze evidence
 6. **Cleans up** — `git restore .` removes all instrumentation (safe because repro test was committed)
 7. **Fixes** — applies a targeted fix based on evidence, then verifies red-to-green
+8. **Live monitors** — a background agent launches the dev server, monitors logs for errors in real-time, and asks you to test at `localhost`. If the agent catches errors (even ones you don't see in the browser), it reports them instantly and re-diagnoses.
 
 **Core principle:** Never propose a fix without runtime evidence.
 

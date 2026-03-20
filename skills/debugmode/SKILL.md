@@ -1,6 +1,6 @@
 ---
 name: debugmode
-description: Use when encountering bugs, unexpected behavior, or when the user wants to systematically debug an issue using runtime evidence — forms hypotheses, instruments code with debug logs, uses background agents to monitor output, fixes issues, and cleans up after verification.
+description: Use when encountering bugs, unexpected behavior, or when the user wants to systematically debug an issue using runtime evidence — forms hypotheses, instruments code with debug logs, uses background agents to monitor output, fixes issues, launches a live-monitored dev server for user testing, and cleans up after verification.
 ---
 
 # Debug Mode
@@ -11,7 +11,7 @@ Hypothesis-driven debugging with runtime instrumentation, background agent monit
 
 Instead of guessing at fixes from static code analysis, **Debug Mode** collects runtime evidence first. It instruments code with strategic debug logs, uses background agents to monitor actual execution, proposes targeted fixes based on evidence, writes regression tests, and cleans up all instrumentation after the bug is confirmed fixed.
 
-**Core principle:** Never propose a fix without runtime evidence. Hypothesize -> Instrument -> Observe -> Fix -> Verify -> Clean.
+**Core principle:** Never propose a fix without runtime evidence. Hypothesize -> Instrument -> Observe -> Fix -> Verify -> Live Test -> Clean.
 
 ## Five Iron Laws
 
@@ -42,9 +42,16 @@ digraph debugmode {
   "git restore . (clean instrumentation)" -> "Apply targeted fix";
   "Apply targeted fix" -> "Red-to-green verification";
   "Red-to-green verification" -> "Bug fixed?";
-  "Bug fixed?" -> "Run full verification suite" [label="yes"];
+  "Bug fixed?" -> "Live Monitor + User Test" [label="yes"];
   "Bug fixed?" -> "Background agent analyzes evidence" [label="no"];
-  "Run full verification suite" -> "Save bug knowledge to memory";
+  "Live Monitor + User Test" -> "Agent monitors logs at server";
+  "Agent monitors logs at server" -> "User tests at localhost";
+  "User tests at localhost" -> "New errors caught?";
+  "New errors caught?" -> "Agent reports + re-diagnose" [label="yes"];
+  "Agent reports + re-diagnose" -> "Apply targeted fix";
+  "New errors caught?" -> "User confirms fix works" [label="no"];
+  "User confirms fix works" -> "Kill server + cleanup";
+  "Kill server + cleanup" -> "Save bug knowledge to memory";
   "Save bug knowledge to memory" -> "Done";
 }
 ```
@@ -308,14 +315,17 @@ Prove the fix actually works with the committed reproduction test:
 
 1. **GREEN check** — Run reproduction test, should PASS now:
    ```bash
-   pnpm run test:run -- <repro-test-file>
+   # Use whatever test runner the project uses:
+   # npm test -- <repro-test-file>
+   # pytest <repro-test-file>
+   # go test -run <TestName> ./...
    ```
 
 2. **RED check** (optional but gold standard) — Temporarily revert fix, reproduction should FAIL:
    ```bash
    git stash push -m "verify-red"
-   pnpm run test:run -- <repro-test-file>  # Should FAIL
-   git stash pop                             # Restore fix
+   # Run repro test again — should FAIL without the fix
+   git stash pop  # Restore fix
    ```
 
 3. **Full verification suite** — run whatever checks the project uses:
@@ -328,24 +338,148 @@ Prove the fix actually works with the committed reproduction test:
    # Run ALL checks that CI would run — check the CI config if unsure
    ```
 
-4. **Ask user to manually verify** (for UI/UX bugs):
-   ```
-   Fix applied and tests pass. To verify manually:
-   1. Restart the dev server
-   2. Hard refresh the browser
-   3. [Repeat the exact reproduction steps]
-   4. Expected behavior: [describe what should happen now]
+If all automated checks pass, proceed to live verification.
 
-   Let me know if the fix works or if the issue persists.
-   ```
+### Phase 9: Live Monitoring + User Testing
 
-### Phase 9: Document and Close
+This is where the fix gets battle-tested in the real application. A background agent launches the dev server, monitors logs for runtime errors, and the user tests the actual app — while the agent watches for anything going wrong behind the scenes.
+
+This phase matters because automated tests can't catch everything — UI regressions, unexpected side effects in other features, and production-like behavior all need human eyes. But instead of the user testing blind, an agent is watching the server logs in real-time, ready to catch and report errors the user might not even notice.
+
+#### Step 1: Launch the dev server with a monitoring agent
+
+Spawn a **background agent** that starts the dev server and continuously monitors its output:
+
+**Background monitoring agent prompt:**
+
+```
+You are a live server monitor for a debugging session.
+
+Bug that was fixed: [bug description]
+Fix that was applied: [brief description of the fix]
+
+Your job:
+1. Start the dev server and monitor its output for errors.
+2. Continuously watch the log file for new errors, exceptions, or warnings.
+3. When you detect an issue, report it immediately with:
+   - The exact error message and stack trace
+   - Which file/line triggered it
+   - Whether it looks related to the fix or is a separate issue
+   - Timestamp of when it occurred
+
+Instructions:
+1. Start the server (detached, logging to file):
+   mkdir -p .claude
+   nohup <dev-server-command> > .claude/live-server.log 2>&1 &
+   echo $! > .claude/server.pid
+
+2. Wait for the server to be ready:
+   - Tail the log until you see the "ready" or "listening" message
+   - Verify with: curl -s -o /dev/null -w "%{http_code}" http://localhost:<port>
+   - If server fails to start, report the error immediately
+
+3. Once server is running, enter monitoring loop:
+   - Every 5 seconds, check .claude/live-server.log for new content
+   - Look for: Exception, Error, FATAL, panic, Traceback, WARN, unhandledRejection
+   - Track the last-read position so you only report NEW errors
+   - Also watch for server crashes (check if PID is still alive)
+
+4. Keep monitoring until told to stop. Do NOT kill the server yourself.
+
+IMPORTANT:
+- Use `tail -f` piped to grep for efficient monitoring
+- Report errors as they happen — don't batch them
+- Distinguish between the FIXED bug recurring vs NEW issues
+- If the server crashes, report immediately and attempt restart
+```
+
+#### Step 2: Tell the user to test
+
+Once the background agent confirms the server is running, tell the user:
+
+```
+Fix applied and all automated tests pass. I've started the dev server
+with a background agent monitoring for errors in real-time.
+
+The app is running at: http://localhost:<port>
+
+Please test the fix:
+1. Open http://localhost:<port> in your browser
+2. Hard refresh (Cmd+Shift+R / Ctrl+Shift+R)
+3. [Specific steps to test the original bug]
+4. [Steps to test related features that might be affected]
+5. Try anything else that feels relevant
+
+I'm watching the server logs in the background. If any errors
+occur — even ones you don't notice in the browser — I'll catch
+them and report immediately.
+
+When you're done testing, let me know:
+- "Looks good" → I'll wrap up
+- "Found an issue: [description]" → I'll check the logs and diagnose
+```
+
+**Key details to always include:**
+- The exact URL (with correct port)
+- Steps to reproduce the original bug (to confirm it's fixed)
+- Steps to test adjacent features (to catch regressions)
+- That the agent is actively monitoring — the user doesn't need to watch the terminal
+
+#### Step 3: React to what happens during testing
+
+**Scenario A: Agent catches an error**
+
+The background monitoring agent detects an error in the logs before the user even reports it. When this happens:
+
+1. Immediately inform the user: "I caught an error in the server logs while you were testing — [brief description]. Checking if it's related to our fix..."
+2. Query the log surgically:
+   ```bash
+   grep -C 5 'Error\|Exception\|FATAL' .claude/live-server.log | tail -n 30
+   ```
+3. Classify the error:
+   - **Related to the fix** → The fix is incomplete. Go back to Phase 7 (apply a refined fix) without restarting the full debug cycle.
+   - **Pre-existing issue** → Inform the user this is unrelated. Log it but don't derail the current fix.
+   - **New regression** → The fix broke something else. Go back to Phase 2 (generate new hypotheses about the regression).
+
+**Scenario B: User reports a bug**
+
+The user says something like "The original bug is fixed but now X is broken" or "I'm seeing a weird error when I click Y."
+
+1. Immediately check the monitoring agent's logs:
+   ```bash
+   tail -n 50 .claude/live-server.log
+   grep -C 3 'Error\|Exception' .claude/live-server.log | tail -n 30
+   ```
+2. Correlate the user's report with any server-side errors
+3. If the logs show nothing, the issue might be client-side only — ask the user to check browser DevTools console
+4. Classify and act (same as Scenario A)
+
+**Scenario C: Clean — no errors, user confirms fix works**
+
+The best outcome. The user says "looks good" and the monitoring agent found no errors. Proceed to cleanup.
+
+#### Step 4: Cleanup the live monitoring
+
+After the user confirms the fix works (or you've handled all issues):
+
+```bash
+# Kill the dev server
+kill $(cat .claude/server.pid) 2>/dev/null
+rm -f .claude/server.pid
+
+# Archive the live server log (useful for the documentation phase)
+# Don't delete yet — Phase 10 may reference it
+```
+
+Tell the monitoring background agent to stop.
+
+### Phase 10: Document and Close
 
 Once the user confirms the fix works:
 
 1. **Clean up debug artifacts:**
    ```bash
-   rm -f .claude/debug.log .claude/debug-server.log
+   rm -f .claude/debug.log .claude/debug-server.log .claude/live-server.log .claude/server.pid
    ```
 
 2. **Save bug knowledge to memory** — write a memory file:
@@ -435,6 +569,8 @@ tail -n 30 .claude/debug.log
 | Running `pnpm run dev` without detaching | Will hang terminal. Always use `nohup ... &`. |
 | No reproduction test committed | You lose git-safe cleanup. Always write and commit repro first. |
 | Skipping the RED check | You can't prove your fix works without proving it fails without the fix. |
+| Skipping live user testing | Automated tests can't catch UI regressions or side effects. Always let the user test. |
+| Killing the server before user confirms | Keep the monitoring agent running until the user says "looks good". |
 
 ## Language-Specific Debug Patterns
 
@@ -459,4 +595,5 @@ tail -n 30 .claude/debug.log
 | 6. Analyze | Background agent parses evidence | Agent tool (background) |
 | 7. Clean + Fix | `git restore .` then apply fix | Bash (git restore), Edit tool |
 | 8. Verify | Red-to-green + full suite | Bash (test commands) |
-| 9. Document | Memory file + merge branch + cleanup | Write to memory, Bash (git) |
+| 9. Live Monitor | Background agent runs server + user tests | Agent (background), Bash (nohup) |
+| 10. Document | Memory file + merge branch + cleanup | Write to memory, Bash (git) |

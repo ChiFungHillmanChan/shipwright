@@ -8,6 +8,10 @@ Production-tested Claude Code skills for the three things every developer does d
 
 [`/ship-it`](#ship-it--full-ship-workflow) | [`/debugmode`](#debugmode--hypothesis-driven-debugging) | [`/code-review`](#code-review--parallel-agent-code-review) | [Install](#quick-install) | [Marketplace](#publishing-to-the-marketplace)
 
+<p align="center">
+  <img src="assets/demo.gif" alt="Shipwright demo — install and run skills" width="800">
+</p>
+
 > **Skills** are markdown files that teach Claude structured workflows. When you invoke a skill (e.g., `/ship-it`), Claude reads the SKILL.md and follows the workflow step by step. Unlike simple prompts, skills define multi-phase processes with decision trees, background agents, and verification steps.
 
 ## Quick Install
